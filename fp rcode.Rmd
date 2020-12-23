@@ -1,0 +1,173 @@
+---
+title: "Upworthy dataset evaluation: Length of a magazine's headline can affect the article's click-rate"
+author: "YL3635"
+date: "18/12/2020"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(broom)
+# Loading in the data
+rawdata <- read_csv("/Users/amandali/Desktop/upworthy-archive-exploratory-packages-03.12.2020.csv")
+```
+
+## Title
+Upworthy dataset evaluation: Length of a magazine's headline can affect the article's click-rate
+
+## Author
+Yifei Li
+
+## Date 
+December 20th, 2020
+
+Code and data supporting this analysis is available at:
+https://github.com/amandayifei/sta304final
+
+## Abstract
+The topic choice of this final report is option D, and this report aimed to test whether Length of a magazine's headline can affect the article's click-rate. After cleaning the original dataset, with creating new data columns including excerpt_ct,headline_ct,lede_ct,slug_ct and click_rate, this assignment intend to use Propensity Score Matching for the following analysis due to the property of the experiment: Observational Study. To reach this intent, a logistic regression model is built for the propensity score and a treated observation group(of those click_rate >= its 75% quantile) is built to make comparison with the original controlled group. Finally, a linear regression model shows a significant level of 'headline_ct'(length of the headline) influence to the click-rate of articles, which indicates a positive influence of headline length to the exposure(click-rate) of a article.
+
+
+## Keywords
+A/B Test, Upworthy Research Archive, Observational Study, Propensity Score Matching
+
+
+## Introduction
+\newline While the Upworthy research archive from https://upworthy.natematias.com/index is a large A/B
+tests’ open online dataset, and the dataset used for this assignment is requested from this Upworthy company. The dataset provide the imformation of the factors affecting the exposure rate(click_rate) and some other related imformation. The upworthy Research Archive is a dataset of headline A/B tests conducted by Upworthy between early 2013 and April 2015.
+
+\newline While this project aimed to find out whether the length of the headline can affect the click_rate of the article, so that it can be a useful imformation providing suggestions for reporters and editorial staffs when writing further articles. 
+
+\newline The experiment is a observational study with A/B tests data. Therefore, direct regression model cannot apply. A Propensity Score Matching is used first to pair the alike outcome into group, and then Simple Linear Regression model is built to find out the significant level of the predictors.
+  
+\newline The data was first cleaned by extracting the useful columns, change the char columns into length counting columns, and set up a mew variable click_rate=clicks/impressions. After that, A barrier of 0.020686 was counted for the whole data group to be put into the treated group, to compare with the original group and match pairs. Lastly, propensity score was calculated for each pair and a linear regression model was built to find out the treatment's significance. The variables to be used in this study are as follows: excerpt,headline,lede,slug,impression and clicks. new varaiable click_rate is set up(based on impression and clicks) as result variable, and the rest of the variable as predictors.
+
+\newline The result from the linear regression model shows a significant level of headline, slug and excerpt. Therefore, the result of the data analysis is positive. Headline length is affecting the click rate of a article.
+
+
+## Data
+\newline The dataset is downloaded from the Upworthy research archive(https://upworthy.natematias.com/index) which is a large A/B test open data platform shows investigation of A/B headline influences and headline related influences, such as excerpt and lede's. While this platform provide a chance for students and learners to do project learning and analysis on real data. However, the data is a bit not up-dated, therefore, after done the analysis, the  useful further steps and suggestions the researchers purposed may cannot be considered in the great extent.  In this project, the main purpose is to find out the whether there is a relationship between headline length and click rate exposure. The population of this experiment is 22666(which is also the population of exploratory dataset), viewing from the lines of the frame: raw_data. While the cleaned_data is the sample data with 20228 units. This experiment do not find respondent purposely, instead, all of the viewers from the internet who click the articles or is exposed to the articles will be the respondents. Therefore, the non-respondents are ignored and excluded from the experiment. The archive included aggregate results on the number of viewers who received a package and who click on the pavkage but does not include any individual information for the purpose of viewer differentiation(Data in the Upworthy Research Archieve). 
+
+\newline During the cleaning process, the main things done are: set up 5 new variables: excerpt_ct,headline_ct,lede_ct,slug_ct,click_rate based on the original's. The first four variable is by counting the string length of the original variables: excerpt, headline, lede and slug. These four variables is four of the ways for upworthy team to change the articles. However, there is another variable called eyecatcher_id, which basically represent the article's picture's id. This variable is not counted in the following analysis due to it's variable type of string, which slow down the calculation in a great extent. However, this will be counted as a weakness since this variable may have casual inference or other relationship with the outcome. While the last vairable is based on the original variable clicks divided by the variable impressions. 
+\newline The view of the raw data is shown below, followed by a view of the cleaned data:
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+##following is the data cleaning process:
+#Keep the useful data columns
+ reduced_data <- 
+  rawdata %>% 
+  select(excerpt,
+         headline,
+         lede,
+         slug,
+         clicks,
+         impressions)
+head(rawdata)
+
+#Remove the na values
+reduced_data <- na.omit(reduced_data)
+
+#Create 4 variables which count the length of ecerpt, headline，lede and slug
+reduced_data$excerpt_ct <- nchar(reduced_data$excerpt)
+reduced_data$headline_ct <- nchar(reduced_data$headline)
+reduced_data$lede_ct <- nchar(reduced_data$lede)
+reduced_data$slug_ct <- nchar(reduced_data$slug)
+
+#Adding the 5th variable -- click_rate = clicks/impressions
+reduced_data$click_rate <- reduced_data$clicks/reduced_data$impressions
+
+#Select only the useful columns, excluding the original string columns, clicks and impressions
+ cleaned_data <- 
+  reduced_data %>% 
+  select(excerpt_ct,
+         headline_ct,
+         lede_ct,
+         slug_ct,
+         click_rate)
+ head(cleaned_data)
+```
+
+## Model
+\newline The software used to run this whole process is R studio, In order to analyze this A/B test observational experiment, propensity score matching method is used overall in the model build up process. While first construct a logistic regression model, followed by a forecast of the dataset, and create matches for the alike pairs. All of the predictors, as well as the outcome in these propensity score model are all in numeric, since numeric data is easier to be fitted in propensity score model than char data(the original data variables before cleaning). While for the variable that cannot be fixed into a numeric: eyecatcher_id is already excluded from the predictors since the data amount of eyecatcher_id is too large for a glm model to analyze.
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+#Construct a logistic regression model for propensity_score
+propensity_score <- glm(click_rate ~ excerpt_ct+ headline_ct + lede_ct + slug_ct, 
+                        family = binomial,
+                        data = cleaned_data)
+
+#Add our forecast to our dataset
+data <- 
+  augment(propensity_score, 
+          data = cleaned_data,
+          type.predict = "response") %>% 
+  dplyr::select(-.resid, -.std.resid, -.hat, -.sigma, -.cooksd) 
+
+#Use forecast to create matches
+data <- 
+  data %>% 
+  arrange(.fitted, click_rate)
+```
+
+\newline In order to set up a 'treated' group, there has to be a barrier for the qualified click_rate to be considered as relatively high click rate among the group. While belows is a summary of the 'click_rate' column. As we can see from the summary: median of click_rate is 0.012837, 3rd quantile of click_rate is 0.020686. So 0.020686 will be set as the barrier for putting units into the treated group in order to make matches.
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+summary(data$click_rate)
+```
+
+\newline A view of the matched dataset is shown below:
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+# Use a matching function from the arm package to pair the closest of the ones that were not treated, to the one that was treated.
+data$treated <- 
+  if_else(data$click_rate >= 0.020686, 1, 0)
+
+data$treated <- 
+  as.integer(data$treated)
+
+matches <- arm::matching(z = data$treated, 
+                         score = data$.fitted)
+
+data <- cbind(data, matches)
+
+# Now we reduce the dataset to just those that are matched
+data_matched <- 
+  data %>% 
+  filter(match.ind != 0) %>% 
+  dplyr::select(-match.ind, -pairs, -treated)
+
+head(data_matched)
+```
+
+\newline Propensity score linear regression model is built, and the result is shown below:
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+# Examining the 'effect' of being treated on average
+# spend in the 'usual' way.
+
+propensity_score_regression <- 
+  lm(click_rate ~ excerpt_ct+ headline_ct + lede_ct + slug_ct, 
+                data = data_matched)
+huxtable::huxreg(propensity_score_regression)
+```
+\newline The alternative model of this propensityscore matching model, might be a direct linear regression model. However, the amount of A/B test data for a linear regression model can be too large to be analyzed. Further, a Simple Linear Regression model cannot exclude the potential of correlation effects between variables. 
+
+## Results
+\newline From the above process of establishing and analyzing the model, we can find that: first of all, the data collection process and hypothesis of this set of upworthy are all without problems, which are in line with the rules. Because there is no obvious correlation between the data, or there is no great degree of confusion in the data. At the same time, we can see that this group of data is very complete at the time of collection. Because when Na value is excluded, most of the rows of data are not removed.
+
+\newline Further, the summary table of the linear regression model is shown as following:
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+summary(propensity_score_regression)
+```
+
+\newline From this linear regression model, we can observe that $\beta_0$ with <2e-16, $\beta_1$ with 1.05e-13, $\beta_2$ with 6.75e-06, $\beta_4$ with 1.90e-05 all shows a significant level of p-value, which represent that the intercept, excerpt_ct, headline_ct and slug_ct all shows influences to the outcome: click_rate. For  $\beta_0$, $\beta_1$, $\beta_2$, $\beta_4$, the $\\H_0$ will be rejected and for $\beta_3$, the p-value of 0.165 > 0.05 shows a failure to reject $\\H_0$, which is saying, excerpt, headline and slug shows a significant level of influences to click-rate. However, the influences of slug_ct is not that obvious.
+
+
+## Discussion
+\newline The whole project does something as follows. Download AB test data about headline for article exposure from upworth website. Then, a model is established to analyze whether the length of the headline will affect the exposure rate of the article. According to the properties of AB test and observational data, the selected model of this project is the linear expression model processed by the project score.
+
+\newline The most significant weakness from this project is eyecatcher column was deleted. eyecatcher_ ID is a very important variable in the original dataset. However, because of its own nature is a string with many characters, it will not be processed in the model because of too much data, so it has to be deleted. But it is undeniable that its lack will make the assessment of the whole project vulnerable: it can not be ruled out that it has correlation with other variables or other types of relationships. So it affects the analysis of the whole experiment.
+
+## References
+\newline Matias, J. Nathan, et al. The Upworthy Research Archive. upworthy.natematias.com/index.
+
+\newline Data in the Upworthy Research Archive. (n.d.). Retrieved December 23, 2020, from https://upworthy.natematias.com/about-the-archive
+
+
+
+
